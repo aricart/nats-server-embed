@@ -1,11 +1,11 @@
 package nse
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/nats-io/gnatsd/server"
 	"net"
-	"os"
 	"time"
 )
 
@@ -23,43 +23,28 @@ func (nse *NatsServer) getServerPort() int {
 	return nse.Server.Addr().(*net.TCPAddr).Port
 }
 
-func Start() *NatsServer {
-	inlineArgs := -1
-	for i, a := range os.Args {
-		if a == "--" {
-			inlineArgs = i + 1
-			break
-		}
+func Start(args []string) (*NatsServer, error) {
+	// Create a FlagSet and sets the usage
+	fs := flag.NewFlagSet("nats-server", flag.ExitOnError)
+	fs.Usage = usage
+	opts, err := server.ConfigureOptions(fs, args,
+		server.PrintServerAndExit,
+		fs.Usage,
+		server.PrintTLSHelpAndDie)
+
+	if err != nil {
+		server.PrintAndDie(err.Error() + "\n" + usageString)
 	}
 
-	if inlineArgs > 0 {
-		// Create a FlagSet and sets the usage
-		fs := flag.NewFlagSet("nats-server", flag.ExitOnError)
-		fs.Usage = usage
-		opts, err := server.ConfigureOptions(fs, os.Args[inlineArgs:],
-			server.PrintServerAndExit,
-			fs.Usage,
-			server.PrintTLSHelpAndDie)
+	s := server.New(opts)
+	s.ConfigureLogger()
 
-		if err != nil {
-			server.PrintAndDie(err.Error() + "\n" + usageString)
-		}
+	go s.Start()
 
-		s := server.New(opts)
-		s.ConfigureLogger()
-
-		fmt.Println("Starting gnatsd")
-
-		go s.Start()
-
-		if !s.ReadyForConnections(5 * time.Second) {
-			panic("unable to start embedded server")
-		}
-
-		return &NatsServer{Server: s}
-	} else {
-		fmt.Println("No gnatsd configuration/arguments provided")
+	if !s.ReadyForConnections(5 * time.Second) {
+		return nil, errors.New("unable to start embedded server")
 	}
 
-	return nil
+	return &NatsServer{Server: s}, nil
+
 }

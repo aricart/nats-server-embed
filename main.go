@@ -27,7 +27,25 @@ func handleSignals() {
 
 func main() {
 	handleSignals()
-	server = nse.Start()
+	var err error
+
+	inlineArgs := -1
+	for i, a := range os.Args {
+		if a == "--" {
+			inlineArgs = i + 1
+			break
+		}
+	}
+
+	var args []string
+	if inlineArgs > -1 {
+		args = os.Args[inlineArgs+1:]
+	}
+
+	server, err = nse.Start(args)
+	if err != nil {
+		panic(err)
+	}
 	if server != nil {
 		runtime.Goexit()
 	}
